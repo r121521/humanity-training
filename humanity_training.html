@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>人間性トレーニング</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;background:#f4f6f8;color:#20242a}
+.app{max-width:760px;margin:auto;min-height:100vh;padding:24px 16px 40px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+h1{font-size:22px;margin:0}.sub{color:#69727d;font-size:13px}
+.card{background:white;border-radius:18px;padding:24px;box-shadow:0 5px 20px #0000000d;margin-bottom:14px}
+.progress{height:7px;background:#e8ebee;border-radius:10px;overflow:hidden;margin:10px 0 20px}
+.bar{height:100%;background:#303942;width:0%;transition:.3s}
+.tag{display:inline-block;padding:5px 9px;background:#eef1f3;border-radius:999px;font-size:12px;color:#58616b;margin-bottom:10px}
+.question{font-size:21px;font-weight:700;line-height:1.55;margin:4px 0 18px}
+textarea{width:100%;min-height:130px;border:1px solid #d8dde2;border-radius:12px;padding:13px;font:inherit;resize:vertical;outline:none}
+textarea:focus{border-color:#59636e;box-shadow:0 0 0 3px #59636e14}
+.row{display:flex;gap:10px;margin-top:12px}
+button{border:0;border-radius:11px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer}
+.primary{background:#252b31;color:#fff;flex:1}.secondary{background:#eef1f3;color:#333}
+button:disabled{opacity:.4;cursor:not-allowed}
+.feedback{border-left:4px solid #68727c;background:#f7f8f9;padding:14px 15px;border-radius:0 10px 10px 0;line-height:1.7}
+.feedback strong{display:block;margin-bottom:5px}
+.choicegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.choice{background:#f2f4f6;border:2px solid transparent;text-align:left}
+.choice.selected{border-color:#303942;background:#fff}
+.small{font-size:13px;color:#69727d;line-height:1.6}
+.hidden{display:none}
+.score{font-size:40px;font-weight:800}
+.axis{margin:13px 0}.axisline{height:9px;background:#e6e9ec;border-radius:10px;overflow:hidden}.axisfill{height:100%;background:#3f4851;border-radius:10px}
+.resultitem{padding:13px 0;border-bottom:1px solid #eceff1}.resultitem:last-child{border:0}
+footer{text-align:center;color:#8a929a;font-size:12px;margin-top:20px}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div><h1>人間性トレーニング</h1><div class="sub">答えを「正解」にするゲームじゃない。</div></div>
+  <div class="sub" id="count"></div>
+</header>
+
+<div id="game">
+  <div class="card">
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <span class="tag" id="tag"></span>
+    <div class="question" id="question"></div>
+    <textarea id="answer" placeholder="思ったことを、そのまま書いてOK"></textarea>
+    <div class="row">
+      <button class="secondary" id="skip">答えにくい</button>
+      <button class="primary" id="submit">回答する</button>
+    </div>
+  </div>
+  <div class="card hidden" id="feedbackCard">
+    <div class="feedback">
+      <strong id="feedbackTitle"></strong>
+      <span id="feedbackText"></span>
+    </div>
+    <div class="row">
+      <button class="primary" id="next">次へ</button>
+    </div>
+  </div>
+</div>
+
+<div id="choices" class="card hidden">
+  <div class="tag">価値観チェック</div>
+  <div class="question" style="font-size:18px">この中で「これは結構イヤだな」と思うものを選んでください。</div>
+  <div class="choicegrid" id="choicegrid"></div>
+  <div class="row"><button class="primary" id="choiceNext" disabled>決定</button></div>
+</div>
+
+<div id="result" class="hidden">
+  <div class="card">
+    <div class="tag">今回の分析</div>
+    <div class="score" id="score"></div>
+    <p id="summary"></p>
+  </div>
+  <div class="card">
+    <div class="tag">見えた価値観</div>
+    <div id="axes"></div>
+  </div>
+  <div class="card">
+    <div class="tag">面接での改善ポイント</div>
+    <div id="advice"></div>
+    <div class="row"><button class="primary" onclick="location.reload()">もう一回やる</button></div>
+  </div>
+</div>
+<footer>これは「良い人」を判定するゲームではなく、考えを言葉にする練習です。</footer>
+</div>
+
+<script>
+const qs=[
+ {tag:"仕事観",q:"仕事で「これはちょっと嫌だな」と思うことは？",axis:"境界線",
+  follow:["じゃあ、それが毎日続いても大丈夫？","何が一番嫌なの？","逆に、そこは許せるのはなぜ？"]},
+ {tag:"人間関係",q:"一緒に働く人に、どんな人がいると働きやすい？",axis:"人間関係",
+  follow:["その条件がなくても仕事はできる？","逆に、どんな人とは合いにくい？","なぜそれを重視する？"]},
+ {tag:"行動",q:"予定していた仕事が急に変わったら、どうする？",axis:"柔軟性",
+  follow:["どこまでなら対応できる？","変更が何度も続いたら？","何を守れれば対応しやすい？"]},
+ {tag:"自己理解",q:"自分の長所を一つ挙げるなら？",axis:"自己理解",
+  follow:["それが実際に出た経験は？","他の人からもそう言われる？","その長所が裏目に出ることは？"]},
+ {tag:"価値観",q:"お金・時間・人間関係・仕事内容。仕事を選ぶとき、どれを特に気にする？",axis:"優先順位",
+  follow:["それを選ぶ理由は？","それ以外はどこまで妥協できる？","実際の経験でそう思ったことは？"]}
+];
+let i=0, answers=[], mode="main", followIndex=0, selected=[];
+const $=id=>document.getElementById(id);
+
+function render(){
+ $("count").textContent=`${Math.min(i+1,qs.length)} / ${qs.length}`;
+ $("bar").style.width=(i/qs.length*100)+"%";
+ $("tag").textContent=qs[i].tag;
+ $("question").textContent=mode==="main"?qs[i].q:qs[i].follow[followIndex];
+ $("answer").value="";
+ $("answer").focus();
+ $("feedbackCard").classList.add("hidden");
+ $("submit").disabled=false;
+}
+function analyzeText(t){
+ const len=t.length;
+ const concrete=/(例えば|たとえば|実際|最近|〜した|したこと|経験|理由|だから|なので|と思う|感じる)/.test(t);
+ const vague=/(なんでも|特にない|どっちでも|別に|大丈夫|まあ|普通|わからない)/g;
+ const vagueCount=(t.match(vague)||[]).length;
+ let points=0;
+ if(len>=20)points+=2;if(len>=50)points+=1;if(concrete)points+=2;if(vagueCount===0)points+=1;
+ if(len<10) return {title:"情報が少なめ",text:"答え自体はOK。ただ、面接官からすると「どんな人なのか」がまだ見えにくい。理由か具体例を1個足してみよう。"};
+ if(vagueCount>=2) return {title:"許容範囲が広めに見える",text:"柔軟なのは強み。ただ、「何でも大丈夫」に寄ると判断基準が見えにくくなる。『でも○○は大事にしています』を1個足すと人柄が出る。"};
+ if(concrete) return {title:"人柄が見える答え",text:"具体的な理由や経験が入っていて、面接官があなたの考え方を想像しやすい。かなり良い方向。"};
+ return {title:"もう一段掘れそう",text:"回答は伝わっている。ここに「なぜそう思う？」か「実際にそうだった経験」を1個足すと、情報量が一気に増える。"};
+}
+$("submit").onclick=()=>{
+ const t=$("answer").value.trim(); if(!t)return;
+ answers.push({q:$("question").textContent,a:t,main:mode==="main"});
+ const f=analyzeText(t);
+ $("feedbackTitle").textContent=f.title;
+ $("feedbackText").textContent=f.text;
+ $("feedbackCard").classList.remove("hidden");
+ $("submit").disabled=true;
+};
+$("skip").onclick=()=>{
+ answers.push({q:$("question").textContent,a:"（スキップ）",main:mode==="main"});
+ if(mode==="main"){mode="follow";followIndex=0}
+ else{followIndex=(followIndex+1)%qs[i].follow.length}
+ render();
+};
+$("next").onclick=()=>{
+ if(mode==="main"){mode="follow";followIndex=0}
+ else{mode="main";i++;if(i>=qs.length){showChoices();return}}
+ render();
+};
+
+function showChoices(){
+ $("game").classList.add("hidden");$("choices").classList.remove("hidden");
+ const items=["急な残業","人間関係の悪さ","仕事内容の単調さ","細かく指示されること","放置されること","通勤時間が長い","予定が頻繁に変わる","給料が低い","自分の時間が減る"];
+ $("choicegrid").innerHTML=items.map((x,n)=>`<button class="choice" data-n="${n}">${x}</button>`).join("");
+ document.querySelectorAll(".choice").forEach(b=>b.onclick=()=>{b.classList.toggle("selected");selected=[...document.querySelectorAll(".choice.selected")].map(x=>x.textContent);$("choiceNext").disabled=selected.length===0});
+}
+$("choiceNext").onclick=()=>{
+ $("choices").classList.add("hidden");$("result").classList.remove("hidden");
+ const total=answers.filter(x=>x.a!=="（スキップ）").length;
+ const detailed=answers.filter(x=>x.a.length>=20).length;
+ const score=Math.min(100,Math.round((total/(qs.length*2))*45+detailed/(qs.length*2)*35+(selected.length/3>1?20:selected.length/3*20)));
+ $("score").textContent=score+" / 100";
+ $("summary").textContent=score>=75?"考えをかなり言葉にできている。次は「自分の基準」を短く伝える練習へ。":score>=50?"考えは出ている。理由・具体例を1個足すだけで、面接での見え方がかなり変わりそう。":"回答を短く済ませる傾向がありそう。まず「なぜ？」を一回だけ追加する練習から。";
+ const axisNames=["境界線","人間関係","柔軟性","自己理解","優先順位"];
+ $("axes").innerHTML=axisNames.map((x,n)=>`<div class="axis"><div>${x}</div><div class="axisline"><div class="axisfill" style="width:${35+(answers.filter(a=>a.main).length*7)+((n*11)%25)}%"></div></div></div>`).join("");
+ const advice=[];
+ if(selected.length>=4)advice.push("許容範囲が広いぶん、面接では「ただし、○○は大事にしています」と境界線を1つ示す。");
+ if(detailed<qs.length)advice.push("回答に「理由」か「具体例」を1個だけ追加する。長話にする必要はない。");
+ advice.push("答えを完成させすぎず、面接官が『それって例えば？』と聞ける余白を残す。");
+ $("advice").innerHTML=advice.map(x=>`<div class="resultitem">${x}</div>`).join("");
+};
+render();
+</script>
+</body>
+</html>
